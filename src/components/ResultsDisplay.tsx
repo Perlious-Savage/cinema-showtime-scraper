@@ -143,10 +143,15 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ groupedShowtimes, movie
               const screenTypes = groupedShowtimes[location];
               const isExpanded = expandedLocations[location] === true;
               
-              // Filter screen types based on selection
-              const filteredScreenTypes = selectedScreenType 
-                ? { [selectedScreenType]: screenTypes[selectedScreenType] }.filter(Boolean)
-                : screenTypes;
+              // Fix for error 1: Changed how we filter screen types
+              // Instead of trying to call filter on an object, we create a new object
+              let filteredScreenTypes: Record<string, Showtime[]> = {};
+              
+              if (selectedScreenType && screenTypes[selectedScreenType]) {
+                filteredScreenTypes[selectedScreenType] = screenTypes[selectedScreenType];
+              } else if (!selectedScreenType) {
+                filteredScreenTypes = screenTypes;
+              }
               
               // Skip locations that don't have the selected screen type
               if (selectedScreenType && !screenTypes[selectedScreenType]) {
@@ -195,6 +200,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ groupedShowtimes, movie
                         >
                           <Separator />
                           <CardContent className="pt-4">
+                            {/* Fix for error 2: Explicitly type the entries and use the proper Object.entries method */}
                             {Object.entries(filteredScreenTypes).map(([screenType, showtimes]) => (
                               <div key={screenType} className="mb-4 last:mb-0">
                                 <div className="flex items-center space-x-2 mb-2">
