@@ -67,7 +67,7 @@ const ScrapeForm: React.FC<ScrapeFormProps> = ({ onResults }) => {
         description: `Getting showtimes for "${movieTitle}"`,
       });
       
-      // Start the scraping process
+      // Start the scraping process with increased timeout
       setProgress(30);
       const result = await crawlWebsite(url);
       
@@ -79,10 +79,15 @@ const ScrapeForm: React.FC<ScrapeFormProps> = ({ onResults }) => {
       
       // Process the results if we have data
       if (result.data && result.data.length > 0) {
+        console.log("Received data from Firecrawl:", result.data);
+        
+        // Get the markdown content from the first data item
         const markdown = result.data[0].markdown;
+        console.log("Markdown length:", markdown.length);
         
         // Extract showtimes from the markdown
         const showtimes = extractShowtimes(markdown);
+        console.log("Extracted showtimes:", showtimes);
         
         if (showtimes.length === 0) {
           throw new Error('No showtimes found in the scraped content');
@@ -90,6 +95,8 @@ const ScrapeForm: React.FC<ScrapeFormProps> = ({ onResults }) => {
         
         // Group the showtimes for better display
         const groupedShowtimes = groupShowtimes(showtimes);
+        console.log("Grouped showtimes:", groupedShowtimes);
+        console.log("Number of locations:", Object.keys(groupedShowtimes).length);
         
         // Pass the results up to the parent component
         onResults(groupedShowtimes, movieTitle);
