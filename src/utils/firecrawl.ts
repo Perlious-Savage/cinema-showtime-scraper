@@ -1,4 +1,3 @@
-
 // Firecrawl API utility
 const API_KEY = "fc-9e613cb0c34645c4bebb041ac9af3ba8";
 
@@ -11,7 +10,13 @@ interface CrawlResponse {
   total?: number;
   creditsUsed?: number;
   expiresAt?: string;
-  data?: any[];
+  data?: {
+    markdown: string;
+    metadata: {
+      url: string;
+      [key: string]: any;
+    };
+  }[];
   error?: string;
   next?: string;
 }
@@ -30,7 +35,8 @@ export async function crawlWebsite(url: string): Promise<CrawlResponse> {
         url,
         limit: 10,
         scrapeOptions: {
-          formats: ["markdown"]
+          formats: ["markdown"],
+          metadata: true // Enable metadata in response
         }
       })
     });
@@ -48,7 +54,7 @@ export async function crawlWebsite(url: string): Promise<CrawlResponse> {
       return { success: false, error: "Failed to initiate crawl" };
     }
 
-    // Poll for results with increased max attempts and longer interval
+    // Poll for results
     return await pollForResults(`https://api.firecrawl.dev/v1/crawl/${id}`);
   } catch (error) {
     console.error("Error during crawl:", error);
