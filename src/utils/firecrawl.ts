@@ -1,3 +1,4 @@
+
 // Firecrawl API utility
 const API_KEY = "fc-9e613cb0c34645c4bebb041ac9af3ba8";
 
@@ -35,8 +36,8 @@ export async function crawlWebsite(url: string): Promise<CrawlResponse> {
         url,
         limit: 10,
         scrapeOptions: {
-          formats: ["markdown"],
-          metadata: true // Enable metadata in response
+          formats: ["markdown"]
+          // metadata key removed as it's causing the API error
         }
       })
     });
