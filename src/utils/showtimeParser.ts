@@ -13,18 +13,7 @@ export function extractShowtimes(markdown: string): Showtime[] {
   console.log("Processing markdown content, length:", markdown?.length || 0);
   console.log("First 500 chars:", markdown?.substring(0, 500));
   
-  // First try the Reel Cinemas pattern
-  try {
-    const reelShowtimes = extractReelShowtimes(markdown);
-    if (reelShowtimes.length > 0) {
-      console.log(`Extracted ${reelShowtimes.length} Reel Cinema showtimes`);
-      return reelShowtimes;
-    }
-  } catch (e) {
-    console.error("Error in Reel Cinemas pattern parsing:", e);
-  }
-  
-  // Then try the novocinemas pattern
+  // First try the novocinemas pattern
   try {
     // Pattern to find cinema locations from Novo Cinemas
     const novoLocations = Array.from(markdown.matchAll(/\[(.*?)\\\\/g))
@@ -156,55 +145,55 @@ export function extractShowtimes(markdown: string): Showtime[] {
     console.error("Error in standard pattern parsing:", e);
   }
   
-  console.log(`Total showtimes extracted: ${showtimesData.length}`);
-  return showtimesData;
-}
-
-// Function to extract Reel Cinemas showtimes
-function extractReelShowtimes(markdown: string): Showtime[] {
-  const showtimesData: Showtime[] = [];
-  
-  try {
-    console.log("Trying Reel Cinemas pattern...");
-    
-    // Extract booking link base
-    const bookingLinkRegex = /\[Book Now\]\((https:\/\/reelcinemas\.com\/en-ae\/movie-details\/.*?)(#)?\)/;
-    const bookingLinkMatch = markdown.match(bookingLinkRegex);
-    const bookingLinkBase = bookingLinkMatch ? bookingLinkMatch[1] : "#";
-    
-    // Pattern to find cinema locations and their experience types and showtimes
-    const placeRegex = /(Dubai Mall|Dubai Marina Mall|The Springs Souk|[A-Za-z\s\-]+)[\s\S]*?(Reel Platinum Suites|Dolby Cinema|Reel Standard|[A-Za-z0-9\s\-\/]+)[\s\S]*?((?:\d{1,2}:\d{2} [AP]M[\s\S]*?)+)/g;
-    
-    let match;
-    while ((match = placeRegex.exec(markdown)) !== null) {
-      const place = match[1].trim();
-      const screenType = match[2].trim();
-      const showtimesText = match[3].trim();
+  // If still empty, try one more fallback pattern for structured text format
+  if (showtimesData.length === 0) {
+    try {
+      console.log("Trying manual text pattern as fallback...");
       
-      console.log(`Found Reel cinema location: ${place}, type: ${screenType}`);
+      // This pattern assumes a format like the example given by the user
+      // Where each location is followed by showtimes and screen types
+      const locations = markdown.split(/\n(?=[A-Za-z]+ [A-Za-z]+ -)/);
       
-      // Extract individual showtimes
-      const showtimeMatches = showtimesText.split('\n')
-        .map(time => time.trim())
-        .filter(time => time && /\d{1,2}:\d{2} [AP]M/.test(time));
-      
-      for (const showtime of showtimeMatches) {
-        console.log(`Found Reel showtime: ${showtime} for ${place}`);
+      for (const locationBlock of locations) {
+        // Skip empty blocks
+        if (!locationBlock.trim()) continue;
         
-        showtimesData.push({
-          place,
-          showtime,
-          bookingLink: bookingLinkBase,
-          screenType
-        });
+        const lines = locationBlock.split('\n').filter(line => line.trim());
+        if (lines.length < 3) continue; // Need at least location, language, and a showtime
+        
+        // First line should be the location
+        const place = lines[0].trim();
+        // Second line should be the language
+        const language = lines[1].trim();
+        
+        console.log(`Processing location from text: ${place}, language: ${language}`);
+        
+        // Process pairs of lines (time and screen type)
+        for (let i = 2; i < lines.length; i += 2) {
+          if (i + 1 >= lines.length) break;
+          
+          const showtime = lines[i].trim();
+          const screenType = lines[i + 1].trim();
+          
+          // Use a dummy booking link since we don't have one in this format
+          const bookingLink = "#";
+          
+          console.log(`Found text-format showtime: ${showtime}, type: ${screenType}`);
+          
+          showtimesData.push({
+            place,
+            showtime,
+            bookingLink,
+            screenType
+          });
+        }
       }
+    } catch (e) {
+      console.error("Error in fallback text pattern parsing:", e);
     }
-    
-    console.log(`Extracted ${showtimesData.length} Reel Cinema showtimes`);
-  } catch (e) {
-    console.error("Error in Reel Cinemas pattern extraction:", e);
   }
   
+  console.log(`Total showtimes extracted: ${showtimesData.length}`);
   return showtimesData;
 }
 
@@ -230,4 +219,49 @@ export function groupShowtimes(showtimes: Showtime[]): Record<string, Record<str
   });
   
   return grouped;
+}
+
+// Helper function to parse raw text format
+export function parseRawNovoText(text: string): Showtime[] {
+  const showtimes: Showtime[] = [];
+  
+  try {
+    // Split by empty lines to get location blocks
+    const blocks = text.split(/\n\s*\n/);
+    
+    for (const block of blocks) {
+      const lines = block.trim().split('\n');
+      if (lines.length < 2) continue;
+      
+      // First line is the location
+      const place = lines[0].trim();
+      // Second line may be language
+      const language = lines[1].match(/^[A-Za-z]+$/) ? lines[1].trim() : null;
+      
+      // Start from index 1 or 2 depending on if we have a language line
+      const startIndex = language ? 2 : 1;
+      
+      // Process pairs of lines (time and type)
+      for (let i = startIndex; i < lines.length; i += 2) {
+        if (i + 1 >= lines.length) break;
+        
+        const showtime = lines[i].trim();
+        const screenType = lines[i + 1].trim();
+        
+        // Skip if either is empty
+        if (!showtime || !screenType) continue;
+        
+        showtimes.push({
+          place,
+          showtime,
+          bookingLink: "#", // Placeholder
+          screenType
+        });
+      }
+    }
+  } catch (e) {
+    console.error("Error parsing raw Novo text:", e);
+  }
+  
+  return showtimes;
 }
