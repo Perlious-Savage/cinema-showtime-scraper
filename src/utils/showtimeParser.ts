@@ -6,14 +6,74 @@ export interface Showtime {
   screenType?: string;
 }
 
-export function extractShowtimes(markdown: string): Showtime[] {
+// Extract showtimes from Cine Royal format
+export function extractCineRoyalShowtimes(markdown: string): Showtime[] {
   const showtimesData: Showtime[] = [];
   
+  try {
+    console.log("Trying Cine Royal pattern...");
+    
+    // Extract booking link first
+    const bookingLinkRegex = /\[VIEW SHOWTIMES\]\((https:\/\/cineroyal\.ae\/home\/chooseScreen\/.*?#showTimeContainer)\)/;
+    const bookingLinkMatch = markdown.match(bookingLinkRegex);
+    const bookingLink = bookingLinkMatch ? bookingLinkMatch[1] : "#";
+    
+    // Pattern to find cinema locations and their showtimes
+    const placeRegex = /(Khalidiyah Mall|Dalma Mall|Al Dhannah Mall|Deerfields Mall)[\s\S]*?STANDARD[\s\S]*?((?:\d{1,2}:\d{2}[AP]MAvailable: \d+[\s\S]*?)+)/g;
+    let match;
+    
+    while ((match = placeRegex.exec(markdown)) !== null) {
+      const place = match[1].trim();
+      const showtimesBlock = match[2].trim();
+      
+      console.log(`Found Cine Royal location: ${place}`);
+      
+      // Extract individual showtimes
+      const showtimeLines = showtimesBlock.split('\n')
+        .map(line => line.trim())
+        .filter(line => line.match(/\d{1,2}:\d{2}[AP]MAvailable:/));
+      
+      for (const line of showtimeLines) {
+        // Extract just the time part (e.g., "12:30PM" from "12:30PMAvailable: 123")
+        const timeMatch = line.match(/(\d{1,2}:\d{2}[AP]M)/);
+        if (timeMatch) {
+          const showtime = timeMatch[1];
+          
+          console.log(`Found Cine Royal showtime: ${showtime} at ${place}`);
+          
+          showtimesData.push({
+            place,
+            showtime,
+            bookingLink,
+            screenType: "STANDARD"
+          });
+        }
+      }
+    }
+    
+    if (showtimesData.length > 0) {
+      console.log(`Extracted ${showtimesData.length} Cine Royal showtimes`);
+      return showtimesData;
+    }
+  } catch (e) {
+    console.error("Error in Cine Royal pattern parsing:", e);
+  }
+  
+  return showtimesData;
+}
+
+export function extractShowtimes(markdown: string): Showtime[] {
   // Debug the markdown content
   console.log("Processing markdown content, length:", markdown?.length || 0);
   console.log("First 500 chars:", markdown?.substring(0, 500));
   
-  // First try the novocinemas pattern
+  // Try Cine Royal pattern first
+  const cineRoyalShowtimes = extractCineRoyalShowtimes(markdown);
+  if (cineRoyalShowtimes.length > 0) {
+    return cineRoyalShowtimes;
+  }
+  
+  // If Cine Royal pattern fails, try the Novo pattern
   try {
     // Pattern to find cinema locations from Novo Cinemas
     const novoLocations = Array.from(markdown.matchAll(/\[(.*?)\\\\/g))
@@ -22,6 +82,8 @@ export function extractShowtimes(markdown: string): Showtime[] {
         index: match.index
       }))
       .sort((a, b) => a.index! - b.index!);
+    
+    const showtimesData: Showtime[] = [];
     
     if (novoLocations.length > 0) {
       console.log(`Found ${novoLocations.length} Novo cinema locations`);
@@ -72,9 +134,10 @@ export function extractShowtimes(markdown: string): Showtime[] {
     console.error("Error in Novo pattern parsing:", e);
   }
   
-  // If Novo pattern fails or doesn't match, try the standard pattern
+  // If previous patterns fail, try the standard pattern
   try {
     console.log("Trying standard pattern...");
+    const showtimesData: Showtime[] = [];
     
     // Pattern to find cinema locations with their showtimes blocks
     const placePattern = /### ([^#\n]+)[\s\n]+([\s\S]*?)(?=\n\n### |\n\n\*\*|\n\*\*\*|\Z)/g;
@@ -141,60 +204,67 @@ export function extractShowtimes(markdown: string): Showtime[] {
         }
       }
     }
+    
+    if (showtimesData.length > 0) {
+      return showtimesData;
+    }
   } catch (e) {
     console.error("Error in standard pattern parsing:", e);
   }
   
   // If still empty, try one more fallback pattern for structured text format
-  if (showtimesData.length === 0) {
-    try {
-      console.log("Trying manual text pattern as fallback...");
+  try {
+    console.log("Trying manual text pattern as fallback...");
+    const showtimesData: Showtime[] = [];
+    
+    // This pattern assumes a format like the example given by the user
+    // Where each location is followed by showtimes and screen types
+    const locations = markdown.split(/\n(?=[A-Za-z]+ [A-Za-z]+ -)/);
+    
+    for (const locationBlock of locations) {
+      // Skip empty blocks
+      if (!locationBlock.trim()) continue;
       
-      // This pattern assumes a format like the example given by the user
-      // Where each location is followed by showtimes and screen types
-      const locations = markdown.split(/\n(?=[A-Za-z]+ [A-Za-z]+ -)/);
+      const lines = locationBlock.split('\n').filter(line => line.trim());
+      if (lines.length < 3) continue; // Need at least location, language, and a showtime
       
-      for (const locationBlock of locations) {
-        // Skip empty blocks
-        if (!locationBlock.trim()) continue;
+      // First line should be the location
+      const place = lines[0].trim();
+      // Second line should be the language
+      const language = lines[1].trim();
+      
+      console.log(`Processing location from text: ${place}, language: ${language}`);
+      
+      // Process pairs of lines (time and screen type)
+      for (let i = 2; i < lines.length; i += 2) {
+        if (i + 1 >= lines.length) break;
         
-        const lines = locationBlock.split('\n').filter(line => line.trim());
-        if (lines.length < 3) continue; // Need at least location, language, and a showtime
+        const showtime = lines[i].trim();
+        const screenType = lines[i + 1].trim();
         
-        // First line should be the location
-        const place = lines[0].trim();
-        // Second line should be the language
-        const language = lines[1].trim();
+        // Use a dummy booking link since we don't have one in this format
+        const bookingLink = "#";
         
-        console.log(`Processing location from text: ${place}, language: ${language}`);
+        console.log(`Found text-format showtime: ${showtime}, type: ${screenType}`);
         
-        // Process pairs of lines (time and screen type)
-        for (let i = 2; i < lines.length; i += 2) {
-          if (i + 1 >= lines.length) break;
-          
-          const showtime = lines[i].trim();
-          const screenType = lines[i + 1].trim();
-          
-          // Use a dummy booking link since we don't have one in this format
-          const bookingLink = "#";
-          
-          console.log(`Found text-format showtime: ${showtime}, type: ${screenType}`);
-          
-          showtimesData.push({
-            place,
-            showtime,
-            bookingLink,
-            screenType
-          });
-        }
+        showtimesData.push({
+          place,
+          showtime,
+          bookingLink,
+          screenType
+        });
       }
-    } catch (e) {
-      console.error("Error in fallback text pattern parsing:", e);
     }
+    
+    if (showtimesData.length > 0) {
+      return showtimesData;
+    }
+  } catch (e) {
+    console.error("Error in fallback text pattern parsing:", e);
   }
   
-  console.log(`Total showtimes extracted: ${showtimesData.length}`);
-  return showtimesData;
+  console.log(`No showtimes extracted from any pattern`);
+  return [];
 }
 
 // Group showtimes by location and screen type for better display
